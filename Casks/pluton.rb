@@ -1,5 +1,5 @@
 cask "pluton" do
-  version "0.5.0"
+  version "0.5.1"
 
   on_arm do
     sha256 "PLACEHOLDER_ARM64_SHA256"
