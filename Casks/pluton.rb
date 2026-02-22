@@ -50,7 +50,7 @@ cask "pluton" do
       KEYCHAIN_PATH="${KEYCHAIN_DIR}/pluton.keychain-db"
       KEYCHAIN_PASSWORD="pluton-service-keychain"
       mkdir -p "${KEYCHAIN_DIR}"
-      if ! security show-keychain-info "${KEYCHAIN_PATH}" &>/dev/null; then
+      if [ ! -f "${KEYCHAIN_PATH}" ]; then
           security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
       fi
       security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
@@ -71,7 +71,7 @@ cask "pluton" do
     system_command "/bin/bash", args: ["-c",
       "export HOME=/var/root && " \
       "mkdir -p /var/root/Library/Keychains && " \
-      "(security show-keychain-info /var/root/Library/Keychains/pluton.keychain-db &>/dev/null || " \
+      "([ -f /var/root/Library/Keychains/pluton.keychain-db ] || " \
       "security create-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db) && " \
       "security unlock-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db && " \
       "security set-keychain-settings /var/root/Library/Keychains/pluton.keychain-db && " \
