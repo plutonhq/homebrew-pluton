@@ -5,18 +5,12 @@ cask "pluton" do
     sha256 "36062b0a5e563877a276c0d2366053fd3ba5e3b029f8f08760ef984e24b06ce9"
     url "https://github.com/plutonhq/pluton/releases/download/pluton-v#{version}/pluton-macos-arm64.tar.gz",
         verified: "github.com/plutonhq/pluton/"
-
-    # The tarball extracts to pluton-macos-arm64/
-    artifact "pluton-macos-arm64", target: "#{staged_path}/pluton-extracted"
   end
 
   on_intel do
     sha256 "0a184db754f9234fecc543143c5a0b72a10d617746dad3cb8d71a05e8dba578b"
     url "https://github.com/plutonhq/pluton/releases/download/pluton-v#{version}/pluton-macos-x64.tar.gz",
         verified: "github.com/plutonhq/pluton/"
-
-    # The tarball extracts to pluton-macos-x64/
-    artifact "pluton-macos-x64", target: "#{staged_path}/pluton-extracted"
   end
 
   name "Pluton"
