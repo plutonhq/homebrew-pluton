@@ -3,7 +3,7 @@ cask "pluton" do
 
   on_arm do
     sha256 "PLACEHOLDER_ARM64_SHA256"
-    url "https://github.com/plutonhq/pluton/releases/download/v#{version}/pluton-macos-arm64.tar.gz",
+    url "https://github.com/plutonhq/pluton/releases/download/pluton-v#{version}/pluton-macos-arm64.tar.gz",
         verified: "github.com/plutonhq/pluton/"
 
     # The tarball extracts to pluton-macos-arm64/
@@ -12,7 +12,7 @@ cask "pluton" do
 
   on_intel do
     sha256 "PLACEHOLDER_X64_SHA256"
-    url "https://github.com/plutonhq/pluton/releases/download/v#{version}/pluton-macos-x64.tar.gz",
+    url "https://github.com/plutonhq/pluton/releases/download/pluton-v#{version}/pluton-macos-x64.tar.gz",
         verified: "github.com/plutonhq/pluton/"
 
     # The tarball extracts to pluton-macos-x64/
