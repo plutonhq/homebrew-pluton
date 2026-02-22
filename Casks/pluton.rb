@@ -45,6 +45,7 @@ cask "pluton" do
     wrapper_content = <<~SH
       #!/bin/bash
       set -e
+      export HOME=/var/root
       KEYCHAIN_DIR="/var/root/Library/Keychains"
       KEYCHAIN_PATH="${KEYCHAIN_DIR}/pluton.keychain-db"
       KEYCHAIN_PASSWORD="pluton-service-keychain"
@@ -64,8 +65,11 @@ cask "pluton" do
                    sudo: true
     system_command "/bin/chmod", args: ["+x", wrapper_path], sudo: true
 
-    # Set up the root keychain now so it's ready for the service
+    # Set up the root keychain now so it's ready for the service.
+    # HOME must be set to /var/root because sudo -E preserves the calling user's HOME,
+    # and security default-keychain writes to $HOME which root doesn't own.
     system_command "/bin/bash", args: ["-c",
+      "export HOME=/var/root && " \
       "mkdir -p /var/root/Library/Keychains && " \
       "(security show-keychain-info /var/root/Library/Keychains/pluton.keychain-db &>/dev/null || " \
       "security create-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db) && " \
