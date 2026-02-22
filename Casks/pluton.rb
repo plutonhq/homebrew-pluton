@@ -40,6 +40,41 @@ cask "pluton" do
     # Make bundled binaries executable
     system_command "/bin/chmod", args: ["-R", "+x", "/opt/pluton/binaries/"], sudo: true
 
+    # Create service wrapper script that sets up the macOS keychain before starting Pluton.
+    # LaunchDaemons run as root, which has no default keychain — @napi-rs/keyring needs one.
+    wrapper_content = <<~SH
+      #!/bin/bash
+      set -e
+      KEYCHAIN_DIR="/var/root/Library/Keychains"
+      KEYCHAIN_PATH="${KEYCHAIN_DIR}/pluton.keychain-db"
+      KEYCHAIN_PASSWORD="pluton-service-keychain"
+      mkdir -p "${KEYCHAIN_DIR}"
+      if ! security show-keychain-info "${KEYCHAIN_PATH}" &>/dev/null; then
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+      fi
+      security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+      security set-keychain-settings "${KEYCHAIN_PATH}"
+      security list-keychains -d system -s "${KEYCHAIN_PATH}"
+      security default-keychain -s "${KEYCHAIN_PATH}"
+      exec /opt/pluton/pluton
+    SH
+    wrapper_path = "/opt/pluton/pluton-service.sh"
+    system_command "/bin/bash",
+                   args: ["-c", "cat > #{wrapper_path} << 'WRAPPER_EOF'\n#{wrapper_content}WRAPPER_EOF"],
+                   sudo: true
+    system_command "/bin/chmod", args: ["+x", wrapper_path], sudo: true
+
+    # Set up the root keychain now so it's ready for the service
+    system_command "/bin/bash", args: ["-c",
+      "mkdir -p /var/root/Library/Keychains && " \
+      "(security show-keychain-info /var/root/Library/Keychains/pluton.keychain-db &>/dev/null || " \
+      "security create-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db) && " \
+      "security unlock-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db && " \
+      "security set-keychain-settings /var/root/Library/Keychains/pluton.keychain-db && " \
+      "security list-keychains -d system -s /var/root/Library/Keychains/pluton.keychain-db && " \
+      "security default-keychain -s /var/root/Library/Keychains/pluton.keychain-db"
+    ], sudo: true
+
     # Create data directories
     [
       "/var/lib/pluton",
@@ -75,7 +110,8 @@ cask "pluton" do
           <string>com.plutonhq.pluton</string>
           <key>ProgramArguments</key>
           <array>
-              <string>/opt/pluton/pluton</string>
+              <string>/bin/bash</string>
+              <string>/opt/pluton/pluton-service.sh</string>
           </array>
           <key>WorkingDirectory</key>
           <string>/opt/pluton</string>
@@ -123,9 +159,13 @@ cask "pluton" do
                    sudo: true
   end
 
-  # Uninstall: stop service, remove LaunchDaemon, remove install dir
+  # Uninstall: stop service, remove LaunchDaemon, remove install dir, clean up keychain
   # Note: /var/lib/pluton (user data) is preserved — use `zap` to remove it
   uninstall launchctl: "com.plutonhq.pluton",
+            script:    { executable: "/bin/bash",
+                         args:       ["-c",
+                                      "security delete-keychain /var/root/Library/Keychains/pluton.keychain-db 2>/dev/null || true"],
+                         sudo:       true },
             delete:    "/opt/pluton"
 
   # zap removes everything including user data
