@@ -1,31 +1,54 @@
-cask "pluton" do
-  version "0.5.2"
+cask "pluton-pro" do
+  version "0.5.1"
+
+  # License key is required to download Pluton PRO from the CDN.
+  # Set the environment variable before installing:
+  #   export HOMEBREW_PLUTON_PRO_LICENSE="YOUR_LICENSE_KEY"
+  #   brew install plutonhq/pluton/pluton-pro
 
   on_arm do
-    sha256 "84a1f644f1725a097eb66db403048fc4cb70ee0d6876a472f39ce6316efedd7c"
-    url "https://github.com/plutonhq/pluton/releases/download/pluton-v#{version}/pluton-macos-arm64.tar.gz",
-        verified: "github.com/plutonhq/pluton/"
+    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+    url "https://dl.usepluton.com/server-pro/releases/#{version}/pluton-pro-macos-arm64.tar.gz?license=#{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}",
+        header: "X-License-Key: #{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}"
   end
 
   on_intel do
-    sha256 "3bb1342a97dac9cfcf9fd54a30e8d2b28d0e5b0a8609449abbfd65e55c50b014"
-    url "https://github.com/plutonhq/pluton/releases/download/pluton-v#{version}/pluton-macos-x64.tar.gz",
-        verified: "github.com/plutonhq/pluton/"
+    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+    url "https://dl.usepluton.com/server-pro/releases/#{version}/pluton-pro-macos-x64.tar.gz?license=#{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}",
+        header: "X-License-Key: #{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}"
   end
 
-  name "Pluton"
-  desc "Self-hosted backup automation software"
+  name "Pluton PRO"
+  desc "Self-hosted backup automation software (PRO edition)"
   homepage "https://usepluton.com"
 
   depends_on macos: ">= :monterey"
 
-  # Install: copy files to /opt/pluton, create data dirs, install LaunchDaemon
+  # Preflight: validate that the license key env var is set before attempting download
+  preflight do
+    license_key = ENV["HOMEBREW_PLUTON_PRO_LICENSE"]
+    if license_key.nil? || license_key.strip.empty?
+      raise <<~EOS
+        Pluton PRO requires a license key to install.
+
+        Please set the HOMEBREW_PLUTON_PRO_LICENSE environment variable:
+
+          export HOMEBREW_PLUTON_PRO_LICENSE="YOUR_LICENSE_KEY"
+          brew install plutonhq/pluton/pluton-pro
+
+        You can find your license key at: https://usepluton.com/account
+      EOS
+    end
+  end
+
+  # Install: copy files to /opt/pluton, create data dirs, set up credentials,
+  # install LaunchDaemon
   postflight do
     # Determine the extracted directory (arm64 or x64)
     extracted_dir = if Hardware::CPU.arm?
-      "#{staged_path}/pluton-macos-arm64"
+      "#{staged_path}/pluton-pro-macos-arm64"
     else
-      "#{staged_path}/pluton-macos-x64"
+      "#{staged_path}/pluton-pro-macos-x64"
     end
 
     # Create install directory
@@ -40,7 +63,7 @@ cask "pluton" do
     # Make bundled binaries executable
     system_command "/bin/chmod", args: ["-R", "+x", "/opt/pluton/binaries/"], sudo: true
 
-    # Create service wrapper script that sets up the macOS keychain before starting Pluton.
+    # Create service wrapper script that sets up the macOS keychain before starting Pluton PRO.
     # LaunchDaemons run as root, which has no default keychain — @napi-rs/keyring needs one.
     wrapper_content = <<~SH
       #!/bin/bash
@@ -66,8 +89,6 @@ cask "pluton" do
     system_command "/bin/chmod", args: ["+x", wrapper_path], sudo: true
 
     # Set up the root keychain now so it's ready for the service.
-    # HOME must be set to /var/root because sudo -E preserves the calling user's HOME,
-    # and security default-keychain writes to $HOME which root doesn't own.
     system_command "/bin/bash", args: ["-c",
       "export HOME=/var/root && " \
       "mkdir -p /var/root/Library/Keychains && " \
@@ -176,12 +197,13 @@ cask "pluton" do
       trash:  "/var/lib/pluton"
 
   caveats <<~EOS
-    Pluton has been installed and the background service is running.
+    Pluton PRO has been installed and the background service is running.
 
     Access the dashboard at: http://localhost:5173
 
     On first launch, you will be prompted to set up your credentials
-    via the web interface. Credentials are stored in macOS Keychain.
+    and activate your license key via the web interface.
+    Credentials are stored in macOS Keychain.
 
     IMPORTANT: Full Disk Access
     To back up files in protected directories (Desktop, Documents, etc.),
@@ -196,7 +218,7 @@ cask "pluton" do
 
     Logs: /var/lib/pluton/logs/
 
-    To uninstall (keeps data):   brew uninstall pluton
-    To uninstall + remove data:  brew uninstall --zap pluton
+    To uninstall (keeps data):   brew uninstall pluton-pro
+    To uninstall + remove data:  brew uninstall --zap pluton-pro
   EOS
 end
