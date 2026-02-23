@@ -42,8 +42,6 @@ cask "pluton" do
 
     # Create service wrapper script that sets up the macOS keychain before starting Pluton.
     # LaunchDaemons run as root, which has no default keychain — @napi-rs/keyring needs one.
-    # We add the keychain to BOTH system and user domain search lists because
-    # SecItemCopyMatching (used by @napi-rs/keyring) searches the user domain by default.
     wrapper_content = <<~SH
       #!/bin/bash
       set -e
@@ -57,10 +55,6 @@ cask "pluton" do
       fi
       security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
       security set-keychain-settings "${KEYCHAIN_PATH}"
-      EXISTING_USER_KC=$(security list-keychains -d user 2>/dev/null | tr -d '"' | xargs)
-      if ! echo "${EXISTING_USER_KC}" | grep -q "pluton.keychain-db"; then
-          security list-keychains -d user -s "${KEYCHAIN_PATH}" ${EXISTING_USER_KC}
-      fi
       security list-keychains -d system -s "${KEYCHAIN_PATH}"
       security default-keychain -s "${KEYCHAIN_PATH}"
       exec /opt/pluton/pluton
@@ -74,19 +68,15 @@ cask "pluton" do
     # Set up the root keychain now so it's ready for the service.
     # HOME must be set to /var/root because sudo -E preserves the calling user's HOME,
     # and security default-keychain writes to $HOME which root doesn't own.
-    # Add to both system and user domain search lists so SecItemCopyMatching can find credentials.
     system_command "/bin/bash", args: ["-c",
       "export HOME=/var/root && " \
       "mkdir -p /var/root/Library/Keychains && " \
-      "KC=/var/root/Library/Keychains/pluton.keychain-db && " \
-      "([ -f \"$KC\" ] || security create-keychain -p pluton-service-keychain \"$KC\") && " \
-      "security unlock-keychain -p pluton-service-keychain \"$KC\" && " \
-      "security set-keychain-settings \"$KC\" && " \
-      "EXISTING=$(security list-keychains -d user 2>/dev/null | tr -d '\"' | xargs) && " \
-      "echo \"$EXISTING\" | grep -q pluton.keychain-db || " \
-      "security list-keychains -d user -s \"$KC\" $EXISTING; " \
-      "security list-keychains -d system -s \"$KC\" && " \
-      "security default-keychain -s \"$KC\""
+      "([ -f /var/root/Library/Keychains/pluton.keychain-db ] || " \
+      "security create-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db) && " \
+      "security unlock-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db && " \
+      "security set-keychain-settings /var/root/Library/Keychains/pluton.keychain-db && " \
+      "security list-keychains -d system -s /var/root/Library/Keychains/pluton.keychain-db && " \
+      "security default-keychain -s /var/root/Library/Keychains/pluton.keychain-db"
     ], sudo: true
 
     # Create data directories
