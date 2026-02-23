@@ -7,13 +7,13 @@ cask "pluton-pro" do
   #   brew install plutonhq/pluton/pluton-pro
 
   on_arm do
-    sha256 "e9f91d36c05a63b7b91dc64feb37929f7e6a6355522ec94b31466c4f949a251b"
+    sha256 "1eb3545418cc2aa110d82598061a51481522a93813f951c8d1ad05d0627e9be1"
     url "https://dl.usepluton.com/server-pro/releases/#{version}/pluton-pro-macos-arm64.tar.gz?license=#{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}",
         header: "X-License-Key: #{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}"
   end
 
   on_intel do
-    sha256 "e97cf24e7b35d48976ac03edd46ab8e1e1ee17e247e46c328794ce17d00158fa"
+    sha256 "c311997677755924f58a327adcab649d1bd874db9195e9fa81ffe6217a0854c2"
     url "https://dl.usepluton.com/server-pro/releases/#{version}/pluton-pro-macos-x64.tar.gz?license=#{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}",
         header: "X-License-Key: #{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}"
   end
