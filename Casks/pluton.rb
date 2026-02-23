@@ -42,6 +42,8 @@ cask "pluton" do
 
     # Create service wrapper script that sets up the macOS keychain before starting Pluton.
     # LaunchDaemons run as root, which has no default keychain — @napi-rs/keyring needs one.
+    # We add the keychain to BOTH system and user domain search lists because
+    # SecItemCopyMatching (used by @napi-rs/keyring) searches the user domain by default.
     wrapper_content = <<~SH
       #!/bin/bash
       set -e
@@ -55,6 +57,10 @@ cask "pluton" do
       fi
       security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
       security set-keychain-settings "${KEYCHAIN_PATH}"
+      EXISTING_USER_KC=$(security list-keychains -d user 2>/dev/null | tr -d '"' | xargs)
+      if ! echo "${EXISTING_USER_KC}" | grep -q "pluton.keychain-db"; then
+          security list-keychains -d user -s "${KEYCHAIN_PATH}" ${EXISTING_USER_KC}
+      fi
       security list-keychains -d system -s "${KEYCHAIN_PATH}"
       security default-keychain -s "${KEYCHAIN_PATH}"
       exec /opt/pluton/pluton
@@ -68,15 +74,19 @@ cask "pluton" do
     # Set up the root keychain now so it's ready for the service.
     # HOME must be set to /var/root because sudo -E preserves the calling user's HOME,
     # and security default-keychain writes to $HOME which root doesn't own.
+    # Add to both system and user domain search lists so SecItemCopyMatching can find credentials.
     system_command "/bin/bash", args: ["-c",
       "export HOME=/var/root && " \
       "mkdir -p /var/root/Library/Keychains && " \
-      "([ -f /var/root/Library/Keychains/pluton.keychain-db ] || " \
-      "security create-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db) && " \
-      "security unlock-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db && " \
-      "security set-keychain-settings /var/root/Library/Keychains/pluton.keychain-db && " \
-      "security list-keychains -d system -s /var/root/Library/Keychains/pluton.keychain-db && " \
-      "security default-keychain -s /var/root/Library/Keychains/pluton.keychain-db"
+      "KC=/var/root/Library/Keychains/pluton.keychain-db && " \
+      "([ -f \"$KC\" ] || security create-keychain -p pluton-service-keychain \"$KC\") && " \
+      "security unlock-keychain -p pluton-service-keychain \"$KC\" && " \
+      "security set-keychain-settings \"$KC\" && " \
+      "EXISTING=$(security list-keychains -d user 2>/dev/null | tr -d '\"' | xargs) && " \
+      "echo \"$EXISTING\" | grep -q pluton.keychain-db || " \
+      "security list-keychains -d user -s \"$KC\" $EXISTING; " \
+      "security list-keychains -d system -s \"$KC\" && " \
+      "security default-keychain -s \"$KC\""
     ], sudo: true
 
     # Create data directories
@@ -163,14 +173,16 @@ cask "pluton" do
                    sudo: true
   end
 
-  # Uninstall: stop service, remove LaunchDaemon, remove install dir
-  # Note: /var/lib/pluton (user data) and keychain are preserved — use `zap` to remove them
+  # Uninstall: stop service only. Install directory (/opt/pluton) is left in place
+  # so that `brew upgrade` can overwrite files without losing keychain access.
+  # Use `brew uninstall --zap` for full cleanup.
   uninstall launchctl: "com.plutonhq.pluton",
-            delete:    "/opt/pluton"
+            delete:    "/Library/LaunchDaemons/com.plutonhq.pluton.plist"
 
-  # zap removes everything including user data and keychain
+  # zap removes everything including install dir, user data and keychain
   zap script: { executable: "/bin/bash",
                 args:       ["-c",
+                             "rm -rf /opt/pluton; " \
                              "security delete-keychain /var/root/Library/Keychains/pluton.keychain-db 2>/dev/null || true"],
                 sudo:       true },
       trash:  "/var/lib/pluton"
@@ -196,7 +208,6 @@ cask "pluton" do
 
     Logs: /var/lib/pluton/logs/
 
-    To uninstall (keeps data):   brew uninstall pluton
-    To uninstall + remove data:  brew uninstall --zap pluton
+    To fully uninstall and remove all data:  brew uninstall --zap pluton
   EOS
 end
