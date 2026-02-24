@@ -147,13 +147,13 @@ cask "pluton-agent" do
     system_command "/bin/mkdir", args: ["-p", "#{install_dir}/bin"], sudo: true
 
     system_command "/bin/cp",
-                   args: ["#{extracted_dir}/bin/pluton-agent", "#{install_dir}/bin/"],
+                   args: ["#{extracted_dir}/pluton-agent", "#{install_dir}/bin/"],
                    sudo: true
     system_command "/bin/cp",
-                   args: ["#{extracted_dir}/bin/restic", "#{install_dir}/bin/"],
+                   args: ["#{extracted_dir}/restic", "#{install_dir}/bin/"],
                    sudo: true
     system_command "/bin/cp",
-                   args: ["#{extracted_dir}/bin/rclone", "#{install_dir}/bin/"],
+                   args: ["#{extracted_dir}/rclone", "#{install_dir}/bin/"],
                    sudo: true
 
     system_command "/bin/chmod", args: ["+x", "#{install_dir}/bin/pluton-agent"], sudo: true
@@ -163,7 +163,7 @@ cask "pluton-agent" do
     # Copy helper scripts if present in the archive
     system_command "/bin/bash",
                    args: ["-c",
-                          "cp #{extracted_dir}/bin/*.sh #{install_dir}/bin/ 2>/dev/null; " \
+                          "cp #{extracted_dir}/*.sh #{install_dir}/bin/ 2>/dev/null; " \
                           "chmod +x #{install_dir}/bin/*.sh 2>/dev/null; true"],
                    sudo: true
 
