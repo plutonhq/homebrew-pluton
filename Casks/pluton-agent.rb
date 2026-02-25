@@ -84,11 +84,13 @@ cask "pluton-agent" do
       "#{staged_path}/pluton-agent-#{version}-darwin-amd64"
     end
 
-    install_dir = "/usr/local/pluton-agent"
-    data_dir    = "/var/lib/pluton-agent"
-    config_dir  = "/etc/pluton-agent"
-    env_file    = "#{config_dir}/pluton-agent.env"
-    plist_path  = "/Library/LaunchDaemons/com.pluton.agent.plist"
+    install_dir   = "/usr/local/pluton-agent"
+    data_dir      = "/var/lib/pluton-agent"
+    config_dir    = "/etc/pluton-agent"
+    env_file      = "#{config_dir}/pluton-agent.env"
+    plist_path    = "/Library/LaunchDaemons/com.pluton.agent.plist"
+    sudoers_path  = "/etc/sudoers.d/pluton-agent"
+    agent_user    = "_pluton-agent"
 
     # --- Detect upgrade vs fresh install ---
     is_upgrade = File.exist?(env_file)
@@ -143,7 +145,31 @@ cask "pluton-agent" do
       end
     end
 
-    # --- Install binaries ---
+    # --- Create dedicated service user (idempotent) ---
+    # On macOS, hidden service users conventionally start with underscore.
+    # We pick a unique UniqueID in the 400 range (reserved for daemons).
+    system_command "/bin/bash",
+                   args: ["-c", <<~SH],
+                     if ! dscl . -read /Users/#{agent_user} > /dev/null 2>&1; then
+                       # Find the next available UID in the 400-499 range
+                       AGENT_UID=400
+                       while dscl . -list /Users UniqueID | awk '{print $2}' | grep -qx "$AGENT_UID"; do
+                         AGENT_UID=$((AGENT_UID + 1))
+                       done
+                       # Create hidden system user
+                       dscl . -create /Users/#{agent_user}
+                       dscl . -create /Users/#{agent_user} UniqueID "$AGENT_UID"
+                       dscl . -create /Users/#{agent_user} PrimaryGroupID 20
+                       dscl . -create /Users/#{agent_user} NFSHomeDirectory /var/empty
+                       dscl . -create /Users/#{agent_user} UserShell /usr/bin/false
+                       dscl . -create /Users/#{agent_user} RealName "Pluton Agent"
+                       # Hide from login window
+                       dscl . -create /Users/#{agent_user} IsHidden 1
+                     fi
+                   SH
+                   sudo: true
+
+    # --- Install binaries (owned by root, not writable by the agent user) ---
     system_command "/bin/mkdir", args: ["-p", "#{install_dir}/bin"], sudo: true
 
     system_command "/bin/cp",
@@ -167,11 +193,42 @@ cask "pluton-agent" do
                           "chmod +x #{install_dir}/bin/*.sh 2>/dev/null; true"],
                    sudo: true
 
-    # --- Create data and config directories ---
+    # Ensure install directory is owned by root
+    system_command "/usr/sbin/chown", args: ["-R", "root:wheel", install_dir], sudo: true
+
+    # --- Create data and config directories (owned by the agent user) ---
     [data_dir, config_dir].each do |dir|
       system_command "/bin/mkdir", args: ["-p", dir], sudo: true
     end
+    system_command "/usr/sbin/chown", args: ["-R", "#{agent_user}:staff", data_dir], sudo: true
     system_command "/bin/chmod", args: ["700", data_dir], sudo: true
+    system_command "/usr/sbin/chown", args: ["-R", "#{agent_user}:staff", config_dir], sudo: true
+
+    # --- Create log files owned by the agent user ---
+    system_command "/usr/bin/touch", args: ["/var/log/pluton-agent.log"], sudo: true
+    system_command "/usr/bin/touch", args: ["/var/log/pluton-agent.error.log"], sudo: true
+    system_command "/usr/sbin/chown",
+                   args: ["#{agent_user}:staff", "/var/log/pluton-agent.log", "/var/log/pluton-agent.error.log"],
+                   sudo: true
+
+    # --- Setup sudoers for privileged operations (restic, rclone, helper scripts) ---
+    sudoers_content = <<~SUDOERS
+      # Sudoers configuration for the Pluton Agent (macOS)
+      Defaults:#{agent_user} !requiretty
+      #{agent_user} ALL=(root) NOPASSWD: SETENV: #{install_dir}/bin/restic *
+      #{agent_user} ALL=(root) NOPASSWD: SETENV: #{install_dir}/bin/rclone *
+      #{agent_user} ALL=(root) NOPASSWD: SETENV: #{install_dir}/bin/file-helper.sh *
+      #{agent_user} ALL=(root) NOPASSWD: SETENV: #{install_dir}/bin/metrics-helper.sh *
+      #{agent_user} ALL=(root) NOPASSWD: SETENV: #{install_dir}/bin/update-helper.sh *
+    SUDOERS
+
+    system_command "/bin/bash",
+                   args: ["-c", "cat > #{sudoers_path} << 'SUDOERS_EOF'\n#{sudoers_content}SUDOERS_EOF"],
+                   sudo: true
+    system_command "/bin/chmod", args: ["0440", sudoers_path], sudo: true
+    system_command "/usr/sbin/chown", args: ["root:wheel", sudoers_path], sudo: true
+    # Validate sudoers syntax
+    system_command "/usr/sbin/visudo", args: ["-c", "-f", sudoers_path], sudo: true
 
     # --- Write environment file (only on fresh install; preserve existing on upgrade) ---
     unless is_upgrade
@@ -183,15 +240,17 @@ cask "pluton-agent" do
         PLUTON_AGENT_ENCRYPTION_KEY=#{encryption_key}
         PLUTON_AGENT_SIGNING_KEY=#{signing_key}
         PLUTON_LICENSE_KEY=#{license_key_val}
+        PLUTON_AGENT_MODE=production
       ENV
 
       system_command "/bin/bash",
                      args: ["-c", "cat > #{env_file} << 'ENVEOF'\n#{env_content}ENVEOF"],
                      sudo: true
-      system_command "/bin/chmod", args: ["600", env_file], sudo: true
+      system_command "/bin/chmod", args: ["640", env_file], sudo: true
+      system_command "/usr/sbin/chown", args: ["#{agent_user}:staff", env_file], sudo: true
     end
 
-    # --- Create LaunchDaemon plist ---
+    # --- Create LaunchDaemon plist (runs as _pluton-agent, not root) ---
     plist_content = <<~XML
       <?xml version="1.0" encoding="UTF-8"?>
       <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -199,6 +258,8 @@ cask "pluton-agent" do
       <dict>
           <key>Label</key>
           <string>com.pluton.agent</string>
+          <key>UserName</key>
+          <string>#{agent_user}</string>
           <key>ProgramArguments</key>
           <array>
               <string>#{install_dir}/bin/pluton-agent</string>
@@ -217,6 +278,8 @@ cask "pluton-agent" do
               <string>#{signing_key}</string>
               <key>PLUTON_LICENSE_KEY</key>
               <string>#{license_key_val}</string>
+              <key>PLUTON_AGENT_MODE</key>
+              <string>production</string>
           </dict>
           <key>RunAtLoad</key>
           <true/>
@@ -259,11 +322,13 @@ cask "pluton-agent" do
   uninstall launchctl: "com.pluton.agent",
             delete:    "/Library/LaunchDaemons/com.pluton.agent.plist"
 
-  # zap removes everything including install dir, config, data, and logs
+  # zap removes everything including install dir, config, data, logs, sudoers, and service user
   zap script: { executable: "/bin/bash",
                 args:       ["-c",
                              "rm -rf /usr/local/pluton-agent; " \
-                             "rm -rf /etc/pluton-agent"],
+                             "rm -rf /etc/pluton-agent; " \
+                             "rm -f /etc/sudoers.d/pluton-agent; " \
+                             "dscl . -delete /Users/_pluton-agent 2>/dev/null; true"],
                 sudo:       true },
       trash:  ["/var/lib/pluton-agent",
                "/var/log/pluton-agent.log",
