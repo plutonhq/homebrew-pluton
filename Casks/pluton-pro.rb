@@ -80,6 +80,13 @@ cask "pluton-pro" do
       security set-keychain-settings "${KEYCHAIN_PATH}"
       security list-keychains -d system -s "${KEYCHAIN_PATH}"
       security default-keychain -s "${KEYCHAIN_PATH}"
+      for ACCOUNT in ENCRYPTION_KEY USER_NAME USER_PASSWORD; do
+         security set-generic-password-partition-list \
+            -s "Pluton" -a "$ACCOUNT" \
+            -k "$KEYCHAIN_PASSWORD" \
+            -S "apple-tool:,apple:," \
+            "$KEYCHAIN_PATH" 2>/dev/null || true
+      done
       exec /opt/pluton/pluton
     SH
     wrapper_path = "/opt/pluton/pluton-service.sh"
