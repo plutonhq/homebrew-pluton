@@ -1,14 +1,14 @@
 cask "pluton" do
-  version "0.12.0"
+  version "0.13.0"
 
   on_arm do
-    sha256 "ab6a3e4076bea0eaed32b7a04535803012fd66bc2be4d980937b0cb4aa8963bf"
+    sha256 "ed365aeb441549fe128ceeb3a402524a410228030e6ba5fdafda16c2d0ce8ba4"
     url "https://github.com/plutonhq/pluton/releases/download/pluton-v#{version}/pluton-macos-arm64.tar.gz",
         verified: "github.com/plutonhq/pluton/"
   end
 
   on_intel do
-    sha256 "869137dd3bbea7b68ad750d5198244840966c46dda8d115243c2e729cdf88d20"
+    sha256 "16c40b29e07e89e702f1366837633a1fa6b3e37403992a9f1ac3c21426dd3273"
     url "https://github.com/plutonhq/pluton/releases/download/pluton-v#{version}/pluton-macos-x64.tar.gz",
         verified: "github.com/plutonhq/pluton/"
   end
