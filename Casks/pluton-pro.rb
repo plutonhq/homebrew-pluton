@@ -41,8 +41,7 @@ cask "pluton-pro" do
     end
   end
 
-  # Install: copy files to /opt/pluton, create data dirs, set up credentials,
-  # install LaunchDaemon
+  # Install: copy files to /opt/pluton, create data dirs, install LaunchDaemon
   postflight do
     # Determine the extracted directory (arm64 or x64)
     extracted_dir = if Hardware::CPU.arm?
@@ -63,30 +62,12 @@ cask "pluton-pro" do
     # Make bundled binaries executable
     system_command "/bin/chmod", args: ["-R", "+x", "/opt/pluton/binaries/"], sudo: true
 
-    # Create service wrapper script that sets up the macOS keychain before starting Pluton PRO.
-    # LaunchDaemons run as root, which has no default keychain — @napi-rs/keyring needs one.
+    # Create service wrapper script for the LaunchDaemon.
+    # Credentials are stored in pluton.enc.env and keys.json (no keychain needed).
     wrapper_content = <<~SH
       #!/bin/bash
       set -e
       export HOME=/var/root
-      KEYCHAIN_DIR="/var/root/Library/Keychains"
-      KEYCHAIN_PATH="${KEYCHAIN_DIR}/pluton.keychain-db"
-      KEYCHAIN_PASSWORD="pluton-service-keychain"
-      mkdir -p "${KEYCHAIN_DIR}"
-      if [ ! -f "${KEYCHAIN_PATH}" ]; then
-          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
-      fi
-      security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
-      security set-keychain-settings "${KEYCHAIN_PATH}"
-      security list-keychains -d system -s "${KEYCHAIN_PATH}"
-      security default-keychain -s "${KEYCHAIN_PATH}"
-      for ACCOUNT in ENCRYPTION_KEY USER_NAME USER_PASSWORD; do
-         security set-generic-password-partition-list \
-            -s "Pluton" -a "$ACCOUNT" \
-            -k "$KEYCHAIN_PASSWORD" \
-            -S "apple-tool:,apple:," \
-            "$KEYCHAIN_PATH" 2>/dev/null || true
-      done
       exec /opt/pluton/pluton
     SH
     wrapper_path = "/opt/pluton/pluton-service.sh"
@@ -94,18 +75,6 @@ cask "pluton-pro" do
                    args: ["-c", "cat > #{wrapper_path} << 'WRAPPER_EOF'\n#{wrapper_content}WRAPPER_EOF"],
                    sudo: true
     system_command "/bin/chmod", args: ["+x", wrapper_path], sudo: true
-
-    # Set up the root keychain now so it's ready for the service.
-    system_command "/bin/bash", args: ["-c",
-      "export HOME=/var/root && " \
-      "mkdir -p /var/root/Library/Keychains && " \
-      "([ -f /var/root/Library/Keychains/pluton.keychain-db ] || " \
-      "security create-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db) && " \
-      "security unlock-keychain -p pluton-service-keychain /var/root/Library/Keychains/pluton.keychain-db && " \
-      "security set-keychain-settings /var/root/Library/Keychains/pluton.keychain-db && " \
-      "security list-keychains -d system -s /var/root/Library/Keychains/pluton.keychain-db && " \
-      "security default-keychain -s /var/root/Library/Keychains/pluton.keychain-db"
-    ], sudo: true
 
     # Create data directories
     [
@@ -122,6 +91,9 @@ cask "pluton-pro" do
     ].each do |dir|
       system_command "/bin/mkdir", args: ["-p", dir], sudo: true
     end
+
+    # Restrict data directory permissions (sensitive files: pluton.enc.env, keys.json)
+    system_command "/bin/chmod", args: ["700", "/var/lib/pluton"], sudo: true
 
     # Write default config.json (only if it doesn't already exist)
     config_path = "/var/lib/pluton/config/config.json"
@@ -192,16 +164,15 @@ cask "pluton-pro" do
   end
 
   # Uninstall: stop service only. Install directory (/opt/pluton) is left in place
-  # so that `brew upgrade` can overwrite files without losing keychain access.
+  # so that `brew upgrade` can overwrite files without losing data.
   # Use `brew uninstall --zap` for full cleanup.
   uninstall launchctl: "com.plutonhq.pluton",
             delete:    "/Library/LaunchDaemons/com.plutonhq.pluton.plist"
 
-  # zap removes everything including install dir, user data and keychain
+  # zap removes everything including install dir and user data
   zap script: { executable: "/bin/bash",
                 args:       ["-c",
-                             "rm -rf /opt/pluton; " \
-                             "security delete-keychain /var/root/Library/Keychains/pluton.keychain-db 2>/dev/null || true"],
+                             "rm -rf /opt/pluton"],
                 sudo:       true },
       trash:  "/var/lib/pluton"
 
@@ -212,7 +183,7 @@ cask "pluton-pro" do
 
     On first launch, you will be prompted to set up your credentials
     and activate your license key via the web interface.
-    Credentials are stored in macOS Keychain.
+    Credentials are stored securely in /var/lib/pluton.
 
     IMPORTANT: Full Disk Access
     To back up files in protected directories (Desktop, Documents, etc.),
