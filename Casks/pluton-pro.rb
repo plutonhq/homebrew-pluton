@@ -63,11 +63,36 @@ cask "pluton-pro" do
     system_command "/bin/chmod", args: ["-R", "+x", "/opt/pluton/binaries/"], sudo: true
 
     # Create service wrapper script for the LaunchDaemon.
-    # Credentials are stored in pluton.enc.env and keys.json (no keychain needed).
+    # Sources /etc/pluton/pluton.env and pluton.enc.env if they exist,
+    # matching the manual installer's pluton-service.sh behavior.
     wrapper_content = <<~SH
       #!/bin/bash
       set -e
       export HOME=/var/root
+
+      ENV_FILE="/etc/pluton/pluton.env"
+      ENC_ENV_FILE="/etc/pluton/pluton.enc.env"
+
+      if [ -f "${ENV_FILE}" ]; then
+          while IFS='=' read -r key value; do
+              case "$key" in '#'*|'') continue;; esac
+              key=$(echo "$key" | xargs)
+              case "$key" in
+                  PLUTON_USER_NAME) export PLUTON_USER_NAME="$value" ;;
+                  PLUTON_USER_PASSWORD) export PLUTON_USER_PASSWORD="$value" ;;
+                  PLUTON_LICENSE_KEY) export PLUTON_LICENSE_KEY="$value" ;;
+              esac
+          done < "${ENV_FILE}"
+      fi
+
+      if [ -f "${ENC_ENV_FILE}" ]; then
+          while IFS='=' read -r key value; do
+              case "$key" in '#'*|'') continue;; esac
+              key=$(echo "$key" | xargs)
+              [ "$key" = "PLUTON_ENCRYPTION_KEY" ] && export PLUTON_ENCRYPTION_KEY="$value"
+          done < "${ENC_ENV_FILE}"
+      fi
+
       exec /opt/pluton/pluton
     SH
     wrapper_path = "/opt/pluton/pluton-service.sh"
@@ -76,8 +101,9 @@ cask "pluton-pro" do
                    sudo: true
     system_command "/bin/chmod", args: ["+x", wrapper_path], sudo: true
 
-    # Create data directories
+    # Create config and data directories
     [
+      "/etc/pluton",
       "/var/lib/pluton",
       "/var/lib/pluton/config",
       "/var/lib/pluton/db",
@@ -92,7 +118,10 @@ cask "pluton-pro" do
       system_command "/bin/mkdir", args: ["-p", dir], sudo: true
     end
 
-    # Restrict data directory permissions (sensitive files: pluton.enc.env, keys.json)
+    # Restrict config directory permissions (sensitive env files)
+    system_command "/bin/chmod", args: ["700", "/etc/pluton"], sudo: true
+
+    # Restrict data directory permissions (sensitive files: keys.json)
     system_command "/bin/chmod", args: ["700", "/var/lib/pluton"], sudo: true
 
     # Write default config.json (only if it doesn't already exist)
