@@ -1,5 +1,5 @@
 cask "pluton-pro" do
-  version "0.16.2"
+  version "0.16.4"
 
   # License key is required to download Pluton PRO from the CDN.
   # Set the environment variable before installing:
@@ -7,13 +7,13 @@ cask "pluton-pro" do
   #   brew install plutonhq/pluton/pluton-pro
 
   on_arm do
-    sha256 "512fdf3eb222bd031a4d6b019cb6c86b37cd14d9ced0bdce8735fec5f189878c"
+    sha256 "23f9c7c68be3fce13fc5bfaaeb305ffbeda7c6ae80f929438752236fe6f23c15"
     url "https://dl.usepluton.com/server-pro/releases/#{version}/pluton-pro-macos-arm64.tar.gz?license=#{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}",
         header: "X-License-Key: #{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}"
   end
 
   on_intel do
-    sha256 "87d130dbbaa0bda7d9ebe8f6daf93cf1da943a07af8bd0952a8ffa768192aa8f"
+    sha256 "4a00f7bf1cddc52334cca3753d180c8d608226d979f6caca8bc8d08b9a509e96"
     url "https://dl.usepluton.com/server-pro/releases/#{version}/pluton-pro-macos-x64.tar.gz?license=#{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}",
         header: "X-License-Key: #{ENV["HOMEBREW_PLUTON_PRO_LICENSE"]}"
   end
