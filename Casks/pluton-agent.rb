@@ -1,5 +1,5 @@
 cask "pluton-agent" do
-  version "0.14.0"
+  version "0.14.1"
 
   # A license key is required to download the Pluton Agent from the CDN.
   # A JSON configuration file (from the Pluton dashboard) is required on first install only.
@@ -14,13 +14,13 @@ cask "pluton-agent" do
   #   brew upgrade pluton-agent
 
   on_arm do
-    sha256 "bffacf5447edeb6674068e5b3fd57d0acd6b66c4d1f3c161f0201b49db68c846"
+    sha256 "05425a342a8545401d632190e5d25e0c5c15f8155963335f6370bb26ed9343b8"
     url "https://dl.usepluton.com/agent/releases/#{version}/pluton-agent-#{version}-darwin-arm64.tar.gz?license=#{ENV["HOMEBREW_PLUTON_AGENT_LICENSE"]}",
         header: "X-License-Key: #{ENV["HOMEBREW_PLUTON_AGENT_LICENSE"]}"
   end
 
   on_intel do
-    sha256 "71756ad7ddd45a2b819d05a07f2741f044406e8684097fd3e386d49bd159ec9f"
+    sha256 "f851e673a38a07d26818d23a77fa60aa4e248cd8f54ba93a6b6e87aa719e6018"
     url "https://dl.usepluton.com/agent/releases/#{version}/pluton-agent-#{version}-darwin-amd64.tar.gz?license=#{ENV["HOMEBREW_PLUTON_AGENT_LICENSE"]}",
         header: "X-License-Key: #{ENV["HOMEBREW_PLUTON_AGENT_LICENSE"]}"
   end
